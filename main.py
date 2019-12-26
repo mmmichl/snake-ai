@@ -35,9 +35,12 @@ COL_MAP = {
 }
 
 pygame.init()
+pygame.font.init()
 
 screen = pygame.display.set_mode((width, height))
 pygame.display.set_caption("Snake AI")
+
+text = pygame.font.SysFont('Arial', 20)
 
 
 def drawBlock(x, y, color):
@@ -76,12 +79,18 @@ def drawGrid(screen):
         pygame.draw.line(screen, (255, 255, 255), (0, y), (width, y))
 
 
+def drawScore(screen):
+    ts = text.render('Score: %d' % len(snake), False, (255, 255, 255))
+    screen.blit(ts, (0, 0))
+
+
 def redrawWindow(screen):
     screen.fill((0,0,0))
     # drawGrid(screen)
 
     grid = setupGrid()
     drawContent(grid)
+    drawScore(screen)
 
     pygame.display.update()
 
@@ -192,10 +201,10 @@ def main():
 
         redrawWindow(screen)
 
-        pygame.time.delay(100)
-        clock.tick(10)
-
         pygame.display.update()
+
+        clock.tick(100)
+        pygame.time.delay(200)
 
 
 main()
