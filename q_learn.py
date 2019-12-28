@@ -7,32 +7,35 @@ import pygame
 from main import HEAD, FOOD, set_food, State, handle_keys, moveSnake, redrawWindow, screen, setupGrid, Feedback, \
     snake_length, reset_game, BODY, BACKGROUND, WALL
 
-epsilon = 0.2  # randomization rate
+epsilon = 0.25  # randomization rate
 lr = 0.85
-gamma = 0.8  # discount factor, typically between 0.8 and 0.99
+gamma = 0.87  # discount factor, typically between 0.8 and 0.99
 reward_map = {
     Feedback.HIT_WALL: -1,
     Feedback.HIT_TAIL: -1,
-    Feedback.ATE_FOOD: +2,
-    Feedback.ELSE: 0,
+    Feedback.ATE_FOOD: +4,
+    Feedback.ELSE: 0 #-0.1,
 }
 
 actions = ['up', 'down', 'left', 'right']
 action_size = len(actions)
 
+view_size = 5
+assert view_size % 2 == 1
 
 # all 4 direction of the head. with possible values: free, body, border, fruit
 S_DIRECTIONS = ['top', 'right', 'bottom', 'left']
-S_CELL = ['free', 'body', 'wall', 'food']
+S_CELL = ['free', 'body', 'food']
+state_base = len(S_CELL)
 cell_map = {
     BACKGROUND: 0,
     BODY: 1,
-    WALL: 2,
-    FOOD: 3,
+    WALL: 1,
+    FOOD: 2,
 }
 
 
-state_size = len(S_DIRECTIONS) ** len(S_CELL)
+state_size = state_base ** (view_size * view_size)
 
 q_table = np.zeros((state_size, action_size))
 
@@ -59,16 +62,18 @@ def q_state(grid):
         if head_y and head_x and food_y and food_x:
             break
 
-    top    = get_cell(lambda: grid[head_y - 1][head_x])
-    bottom = get_cell(lambda: grid[head_y + 1][head_x])
-    right  = get_cell(lambda: grid[head_y][head_x + 1])
-    left   = get_cell(lambda: grid[head_y][head_x - 1])
+    half_view = math.floor(view_size / 2)
 
-    return state_to_idx(top, right, bottom, left)
+    state = []
+    for y in range(head_y - half_view, head_y + half_view + 1):
+        for x in range(head_x - half_view, head_x + half_view + 1):
+            state.append(str(get_cell(lambda: grid[y][x])))
+
+    return int(''.join(state), state_base)
 
 
 def state_to_idx(top, right, bottom, left):
-    return int('%d%d%d%d' % (top, right, bottom, left), 4)
+    return int('%d%d%d%d' % (top, right, bottom, left), state_base)
 
 
 def decide_action(grid) -> int:
@@ -96,7 +101,7 @@ def main():
     clock = pygame.time.Clock()
     flag = True
     state = State.RUN
-    delay = 200
+    delay = 0
 
     reset_game()
     new_grid = setupGrid()
