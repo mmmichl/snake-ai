@@ -4,10 +4,9 @@ from enum import Enum, auto
 
 import pygame
 
-
 cell_size = 20
 
-rows = 20
+rows = 10
 cols = rows
 
 SNAKE_COLOR = (0, 220, 0)
@@ -18,15 +17,14 @@ SNAKE_FOOD_COLOR = (150, 0, 0)
 width = cols * cell_size
 height = rows * cell_size
 
-
 snake = [(cols // 2, rows // 2)]
-direction = 'right'
 food = None
 
 BACKGROUND = 0
 HEAD = 1
 BODY = 2
 FOOD = 3
+WALL = 4
 
 COL_MAP = {
     HEAD: SNAKE_HEAD_COLOR,
@@ -41,10 +39,17 @@ screen = pygame.display.set_mode((width, height))
 pygame.display.set_caption("Snake AI")
 
 text = pygame.font.SysFont('Arial', 20)
+banner_text = pygame.font.SysFont('Arial', 40)
 
 
 def drawBlock(x, y, color):
-    pygame.draw.rect(screen, color, (x * cell_size + 1, y * cell_size + 1, cell_size -1, cell_size -1))
+    pygame.draw.rect(screen, color, (x * cell_size + 1, y * cell_size + 1, cell_size - 1, cell_size - 1))
+
+
+def reset_game():
+    global snake
+    snake = [(cols // 2, rows // 2)]
+    set_food()
 
 
 def setupGrid():
@@ -79,16 +84,19 @@ def drawGrid(screen):
         pygame.draw.line(screen, (255, 255, 255), (0, y), (width, y))
 
 
+def snake_length():
+    return len(snake)
+
+
 def drawScore(screen):
     ts = text.render('Score: %d' % len(snake), False, (255, 255, 255))
     screen.blit(ts, (0, 0))
 
 
-def redrawWindow(screen):
-    screen.fill((0,0,0))
+def redrawWindow(screen, grid):
+    screen.fill((0, 0, 0))
     # drawGrid(screen)
 
-    grid = setupGrid()
     drawContent(grid)
     drawScore(screen)
 
@@ -104,7 +112,7 @@ def bites_in_tail(x, y):
 
 
 def is_out_of_bound(x, y):
-    return x < 0 or y < 0 or x >= cols or y >= cols or bites_in_tail(x, y)
+    return x < 0 or y < 0 or x >= cols or y >= cols
 
 
 def set_food():
@@ -129,7 +137,14 @@ def handle_food() -> bool:
         return True
 
 
-def moveSnake() -> bool:
+class Feedback(Enum):
+    ATE_FOOD = auto(),
+    HIT_WALL = auto(),
+    HIT_TAIL = auto(),
+    ELSE = auto()
+
+
+def moveSnake(direction: str) -> Feedback:
     x, y = snake[0]
 
     if direction == 'up':
@@ -142,23 +157,27 @@ def moveSnake() -> bool:
         x += 1
 
     if is_out_of_bound(x, y):
-        return False
+        return Feedback.HIT_WALL
 
-    snake.insert(0, (x,y))
+    if bites_in_tail(x, y):
+        return Feedback.HIT_TAIL
 
-    if not handle_food():
+    snake.insert(0, (x, y))
+
+    if handle_food():
+        return Feedback.ATE_FOOD
+    else:
         snake.pop()
-
-    return True
+        return Feedback.ELSE
 
 
 class State(Enum):
+    INIT = auto(),
     RUN = auto(),
     GAME_OVER = auto(),
 
 
-def handle_keys(key):
-    global direction
+def handle_keys(key, direction):
     if key == pygame.K_LEFT:
         if not direction == 'right':
             direction = 'left'
@@ -172,15 +191,15 @@ def handle_keys(key):
         if not direction == 'up':
             direction = 'down'
 
+    return direction
+
 
 def main():
     set_food()
 
     clock = pygame.time.Clock()
-
     flag = True
-
-    state = State.GAME_OVER
+    state = State.INIT
 
     while flag:
         last_key_event = None
@@ -193,18 +212,30 @@ def main():
                     state = State.RUN
 
         if last_key_event:
-            handle_keys(last_key_event.key)
+            direction = handle_keys(last_key_event.key, direction)
 
         if state == State.RUN:
-            if not moveSnake():
+            feedback = moveSnake(direction)
+            if feedback in [Feedback.HIT_TAIL, Feedback.HIT_WALL]:
                 state = State.GAME_OVER
 
-        redrawWindow(screen)
+        grid = setupGrid()
+        redrawWindow(screen, grid)
+        ts = None
+        if state == State.INIT:
+            ts = banner_text.render('Press \'space\' to start', True, (255, 255, 255), (0, 0, 0))
+        if state == State.GAME_OVER:
+            ts = banner_text.render('Game over!', True, (255, 255, 255), (0, 0, 0))
+
+        if ts:
+            w, h = ts.get_size()
+            screen.blit(ts, (width / 2 - w / 2, height / 2 - h / 2))
 
         pygame.display.update()
 
         clock.tick(100)
-        pygame.time.delay(200)
+        pygame.time.delay(max(delay, 0))
 
 
-main()
+if __name__ == '__main__':
+    main()
