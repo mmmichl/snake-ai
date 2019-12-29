@@ -5,19 +5,19 @@ import numpy as np
 import pygame
 
 from main import HEAD, FOOD, set_food, State, handle_keys, moveSnake, redrawWindow, screen, setupGrid, Feedback, \
-    snake_length, reset_game, BODY, BACKGROUND, WALL
+    snake_length, reset_game, BODY, BACKGROUND, WALL, rows, cols
 
-epsilon = 0.25  # randomization rate
+epsilon = 0.1  # randomization rate
 lr = 0.85
-gamma = 0.87  # discount factor, typically between 0.8 and 0.99
+gamma = 0.90  # discount factor, typically between 0.8 and 0.99
 reward_map = {
     Feedback.HIT_WALL: -1,
     Feedback.HIT_TAIL: -1,
-    Feedback.ATE_FOOD: +4,
+    Feedback.ATE_FOOD: +1,
     Feedback.ELSE: 0 #-0.1,
 }
 
-actions = ['up', 'down', 'left', 'right']
+actions = [pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT, '']
 action_size = len(actions)
 
 view_size = 5
@@ -44,14 +44,14 @@ def get_cell(f):
     try:
         return cell_map[f()]
     except:
-        return 2
+        return 1
 
 def q_state(grid):
     head_y = head_x = None
     food_y = food_x = None
 
-    for y, y_arr in enumerate(grid):
-        for x, s in enumerate(y_arr):
+    for x, xarr in enumerate(grid):
+        for y, s in enumerate(xarr):
             if s == HEAD:
                 head_y, head_x = (y, x)
             elif s == FOOD:
@@ -67,7 +67,7 @@ def q_state(grid):
     state = []
     for y in range(head_y - half_view, head_y + half_view + 1):
         for x in range(head_x - half_view, head_x + half_view + 1):
-            state.append(str(get_cell(lambda: grid[y][x])))
+            state.append(str(get_cell(lambda: grid[x][y])))
 
     return int(''.join(state), state_base)
 
@@ -94,9 +94,35 @@ def update_q_values(state, action, new_state, reward):
     q_table[state, action] += lr * (reward + gamma * np.max(q_table[new_state, :]) - q_table[state, action])
 
 
+def print_debug(grid, new_grid, action, reward):
+    lines_old = []
+    lines_new = []
+    for y in range(rows):
+        l_old = []
+        l_new = []
+        for x in range(cols):
+            l_old.append(str(grid[x][y]))
+            l_new.append(str(new_grid[x][y]))
+
+        lines_old.append(l_old)
+        lines_new.append(l_new)
+
+    for i in range(len(lines_new)):
+        print("%s\t\t%s" % (' '.join(lines_old[i]), ' '.join(lines_new[i])))
+
+    print()
+    print('action: "%s", reward %d' % (actions[action], reward))
+
+
+# def save_model(ep):
+#     np.save('snake-%d' % ep, q_table)
+#     print('saved')
+
+
 def main():
     episode = 1
     max_score = 0
+    avg_len = np.array([0] * 250)
 
     clock = pygame.time.Clock()
     flag = True
@@ -104,7 +130,8 @@ def main():
     delay = 0
 
     reset_game()
-    new_grid = setupGrid()
+    grid = setupGrid()
+    direction = 'right'
 
     while flag:
         last_key_event = None
@@ -130,27 +157,37 @@ def main():
 
         if state == State.GAME_OVER:
             max_score = max(snake_length(), max_score)
-            print('Episode %2d, score: %2d/%2d' % (episode, snake_length(), max_score))
+            death_cuase = 'wall' if feedback == Feedback.HIT_WALL else 'tail' if feedback == Feedback.HIT_TAIL else 'unkn'
+            sl = '%2d' % snake_length() if snake_length() > 2 else ' _'
+            avg_len[episode % len(avg_len)] = snake_length()
+            print('Game %2d, score: %s/%2d, avg len: %.2f' % (episode, sl, max_score, np.average(avg_len)))
+
 
             episode += 1
             reset_game()
-            new_grid = setupGrid()
+            grid = setupGrid()
+            direction = 'right'
             state = State.RUN
 
         if state == State.RUN:
-            grid = new_grid
 
             action = decide_action(grid)
-            feedback = moveSnake(actions[action])
-            if feedback in [Feedback.HIT_TAIL, Feedback.HIT_WALL]:
-                state = State.GAME_OVER
+            if actions[action]:
+                direction = handle_keys(actions[action], direction)
+            feedback = moveSnake(direction)
 
             reward = reward_map[feedback]
-            new_grid = setupGrid()
+            if feedback in [Feedback.HIT_TAIL]:
+                # print_debug(old_grid, grid, action, reward)
+                state = State.GAME_OVER
+            if feedback in [Feedback.HIT_TAIL, Feedback.HIT_WALL]:
+                state = State.GAME_OVER
+            old_grid = grid
+            grid = setupGrid()
 
-            update_q_values(q_state(grid), action, q_state(new_grid), reward)
+            update_q_values(q_state(old_grid), action, q_state(grid), reward)
 
-        redrawWindow(screen, new_grid)
+        redrawWindow(screen, grid)
         pygame.display.update()
 
         # clock.tick(100)

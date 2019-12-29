@@ -17,7 +17,7 @@ SNAKE_FOOD_COLOR = (150, 0, 0)
 width = cols * cell_size
 height = rows * cell_size
 
-snake = [(cols // 2, rows // 2)]
+snake = [(cols // 2, rows // 2), (cols // 2 - 1, rows // 2)]
 food = None
 
 BACKGROUND = 0
@@ -48,7 +48,7 @@ def drawBlock(x, y, color):
 
 def reset_game():
     global snake
-    snake = [(cols // 2, rows // 2)]
+    snake = [(cols // 2, rows // 2), (cols // 2 - 1, rows // 2)]
     set_food()
 
 
