@@ -11,9 +11,9 @@ epsilon = 0.1  # randomization rate
 lr = 0.85
 gamma = 0.90  # discount factor, typically between 0.8 and 0.99
 reward_map = {
-    Feedback.HIT_WALL: -1,
-    Feedback.HIT_TAIL: -1,
-    Feedback.ATE_FOOD: +1,
+    Feedback.HIT_WALL: -10,
+    Feedback.HIT_TAIL: -10,
+    Feedback.ATE_FOOD: +10,
     Feedback.ELSE: 0 #-0.1,
 }
 
@@ -35,7 +35,15 @@ cell_map = {
 }
 
 
-state_size = state_base ** (view_size * view_size)
+## for area around head
+# state_size = state_base ** (view_size * view_size)
+# def q_state(grid, direction) -> int:
+#     return q_state_area_head(grid)
+
+state_size = 2 ** 11
+def q_state(grid, direction) -> int:
+    return q_stead_11_bool(grid, direction)
+
 
 q_table = np.zeros((state_size, action_size))
 
@@ -46,7 +54,77 @@ def get_cell(f):
     except:
         return 1
 
-def q_state(grid):
+
+def q_stead_11_bool(grid, direction):
+    head_x, head_y, food_x, food_y = get_head_position(grid)
+
+    def is_danger(x, y):
+        try:
+            return grid[x][y] in [BODY, WALL]
+        except:
+            return True
+
+    dir_up = dir_down = dir_left = dir_right = False
+
+    if direction == 'up':
+        danger_ahead = is_danger(head_x - 1, head_y)
+        danger_left = is_danger(head_x, head_y - 1)
+        danger_right = is_danger(head_x, head_y + 1)
+        dir_up = True
+    elif direction == 'down':
+        danger_ahead = is_danger(head_x + 1, head_y)
+        danger_left = is_danger(head_x, head_y + 1)
+        danger_right = is_danger(head_x, head_y - 1)
+        dir_down = True
+    elif direction == 'left':
+        danger_ahead = is_danger(head_x, head_y - 1)
+        danger_left = is_danger(head_x + 1, head_y)
+        danger_right = is_danger(head_x - 1, head_y)
+        dir_left = True
+    elif direction == 'right':
+        danger_ahead = is_danger(head_x, head_y + 1)
+        danger_left = is_danger(head_x - 1, head_y)
+        danger_right = is_danger(head_x + 1, head_y)
+        dir_right = True
+    else:
+        raise Exception('unknown direction ' + direction)
+
+    food_above = food_x <= head_x
+    food_below = food_x >= head_x
+    food_left = food_y <= head_y
+    food_right = food_y >= head_y
+
+    categorical_state = map(lambda x: int(x), [
+        danger_ahead,
+        danger_left,
+        danger_right,
+        dir_up,
+        dir_down,
+        dir_left,
+        dir_right,
+        food_above,
+        food_below,
+        food_left,
+        food_right,
+    ])
+
+    return int(''.join(map(lambda x: str(x), categorical_state)), 2)
+
+
+def q_state_area_head(grid) -> int:
+    head_x, head_y, _, _ = get_head_position(grid)
+
+    half_view = math.floor(view_size / 2)
+
+    state = []
+    for y in range(head_y - half_view, head_y + half_view + 1):
+        for x in range(head_x - half_view, head_x + half_view + 1):
+            state.append(str(get_cell(lambda: grid[x][y])))
+
+    return int(''.join(state), state_base)
+
+
+def get_head_position(grid):
     head_y = head_x = None
     food_y = food_x = None
 
@@ -62,21 +140,14 @@ def q_state(grid):
         if head_y and head_x and food_y and food_x:
             break
 
-    half_view = math.floor(view_size / 2)
-
-    state = []
-    for y in range(head_y - half_view, head_y + half_view + 1):
-        for x in range(head_x - half_view, head_x + half_view + 1):
-            state.append(str(get_cell(lambda: grid[x][y])))
-
-    return int(''.join(state), state_base)
+    return head_x, head_y, food_x, food_y
 
 
-def state_to_idx(top, right, bottom, left):
+def state_to_idx(top, right, bottom, left) -> int:
     return int('%d%d%d%d' % (top, right, bottom, left), state_base)
 
 
-def decide_action(grid) -> int:
+def decide_action(grid, direction) -> int:
     if random.uniform(0, 1) < epsilon:
         # Explore: random action
         action = random.randint(0, action_size - 1)
@@ -84,7 +155,7 @@ def decide_action(grid) -> int:
         return action
     else:
         # Exploit: select action with max value
-        state = q_table[q_state(grid)]
+        state = q_table[q_state(grid, direction)]
         action = np.argmax(state)
         # print('action:', actions[action])
         return action
@@ -171,7 +242,7 @@ def main():
 
         if state == State.RUN:
 
-            action = decide_action(grid)
+            action = decide_action(grid, direction)
             if actions[action]:
                 direction = handle_keys(actions[action], direction)
             feedback = moveSnake(direction)
@@ -185,7 +256,7 @@ def main():
             old_grid = grid
             grid = setupGrid()
 
-            update_q_values(q_state(old_grid), action, q_state(grid), reward)
+            update_q_values(q_state(old_grid, direction), action, q_state(grid, direction), reward)
 
         redrawWindow(screen, grid)
         pygame.display.update()

@@ -4,7 +4,7 @@ from enum import Enum, auto
 
 import pygame
 
-cell_size = 20
+cell_size = 30
 
 rows = 10
 cols = rows
@@ -14,7 +14,7 @@ SNAKE_HEAD_COLOR = (0, 150, 0)
 SNAKE_FOOD_COLOR = (150, 0, 0)
 
 # calcuate what we need
-width = cols * cell_size
+width = cols * cell_size * 2
 height = rows * cell_size
 
 snake = [(cols // 2, rows // 2), (cols // 2 - 1, rows // 2)]
