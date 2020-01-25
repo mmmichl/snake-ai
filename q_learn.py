@@ -4,8 +4,7 @@ import random
 import numpy as np
 import pygame
 
-from main import HEAD, FOOD, set_food, State, handle_keys, moveSnake, redrawWindow, screen, setupGrid, Feedback, \
-    snake_length, reset_game, BODY, BACKGROUND, WALL, rows, cols
+from main import HEAD, FOOD, State, handle_keys, Feedback, BODY, BACKGROUND, WALL, Environment
 
 epsilon = 0.1  # randomization rate
 lr = 0.85
@@ -42,7 +41,7 @@ cell_map = {
 
 state_size = 2 ** 11
 def q_state(grid, direction) -> int:
-    return q_stead_11_bool(grid, direction)
+    return q_state_11_bool(grid, direction)
 
 
 q_table = np.zeros((state_size, action_size))
@@ -55,7 +54,13 @@ def get_cell(f):
         return 1
 
 
-def q_stead_11_bool(grid, direction):
+def q_state_11_bool(grid, direction):
+    categorical_state = map(lambda x: int(x), q_state_11(direction, grid))
+
+    return int(''.join(map(lambda x: str(x), categorical_state)), 2)
+
+
+def q_state_11(direction, grid):
     head_x, head_y, food_x, food_y = get_head_position(grid)
 
     def is_danger(x, y):
@@ -65,7 +70,6 @@ def q_stead_11_bool(grid, direction):
             return True
 
     dir_up = dir_down = dir_left = dir_right = False
-
     if direction == 'up':
         danger_ahead = is_danger(head_x - 1, head_y)
         danger_left = is_danger(head_x, head_y - 1)
@@ -88,13 +92,11 @@ def q_stead_11_bool(grid, direction):
         dir_right = True
     else:
         raise Exception('unknown direction ' + direction)
-
     food_above = food_x <= head_x
     food_below = food_x >= head_x
     food_left = food_y <= head_y
     food_right = food_y >= head_y
-
-    categorical_state = map(lambda x: int(x), [
+    state = [
         danger_ahead,
         danger_left,
         danger_right,
@@ -106,9 +108,8 @@ def q_stead_11_bool(grid, direction):
         food_below,
         food_left,
         food_right,
-    ])
-
-    return int(''.join(map(lambda x: str(x), categorical_state)), 2)
+    ]
+    return state
 
 
 def q_state_area_head(grid) -> int:
@@ -165,13 +166,13 @@ def update_q_values(state, action, new_state, reward):
     q_table[state, action] += lr * (reward + gamma * np.max(q_table[new_state, :]) - q_table[state, action])
 
 
-def print_debug(grid, new_grid, action, reward):
+def print_debug(grid, new_grid, action, reward, env: Environment):
     lines_old = []
     lines_new = []
-    for y in range(rows):
+    for y in range(env.rows):
         l_old = []
         l_new = []
-        for x in range(cols):
+        for x in range(env.cols):
             l_old.append(str(grid[x][y]))
             l_new.append(str(new_grid[x][y]))
 
@@ -195,13 +196,12 @@ def main():
     max_score = 0
     avg_len = np.array([0] * 250)
 
+    env = Environment()
     clock = pygame.time.Clock()
     flag = True
     state = State.RUN
     delay = 0
 
-    reset_game()
-    grid = setupGrid()
     direction = 'right'
 
     while flag:
@@ -227,38 +227,36 @@ def main():
         #     direction = handle_keys(last_key_event.key, direction)
 
         if state == State.GAME_OVER:
-            max_score = max(snake_length(), max_score)
+            max_score = max(env.snake_length(), max_score)
             death_cuase = 'wall' if feedback == Feedback.HIT_WALL else 'tail' if feedback == Feedback.HIT_TAIL else 'unkn'
-            sl = '%2d' % snake_length() if snake_length() > 2 else ' _'
-            avg_len[episode % len(avg_len)] = snake_length()
+            sl = '%2d' % env.snake_length() if env.snake_length() > 2 else ' _'
+            avg_len[episode % len(avg_len)] = env.snake_length()
             print('Game %2d, score: %s/%2d, avg len: %.2f' % (episode, sl, max_score, np.average(avg_len)))
 
 
             episode += 1
-            reset_game()
-            grid = setupGrid()
+            env.reset_game()
             direction = 'right'
             state = State.RUN
 
         if state == State.RUN:
-
-            action = decide_action(grid, direction)
+            action = decide_action(env.grid, direction)
             if actions[action]:
                 direction = handle_keys(actions[action], direction)
-            feedback = moveSnake(direction)
+            old_grid = env.grid
+            feedback = env.step(direction)
 
             reward = reward_map[feedback]
             if feedback in [Feedback.HIT_TAIL]:
-                # print_debug(old_grid, grid, action, reward)
+                # print_debug(old_grid, grid, action, reward, env)
                 state = State.GAME_OVER
             if feedback in [Feedback.HIT_TAIL, Feedback.HIT_WALL]:
                 state = State.GAME_OVER
-            old_grid = grid
-            grid = setupGrid()
+            grid = env.grid
 
             update_q_values(q_state(old_grid, direction), action, q_state(grid, direction), reward)
 
-        redrawWindow(screen, grid)
+        env.redrawWindow()
         pygame.display.update()
 
         # clock.tick(100)
