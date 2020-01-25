@@ -6,7 +6,8 @@ import pygame
 
 from main import HEAD, FOOD, State, handle_keys, Feedback, BODY, BACKGROUND, WALL, Environment, is_valid_direction
 
-epsilon = 0.1  # randomization rate
+epsilon = 0.2  # randomization rate
+annealing_rate = 1.5 # per 50 episodes, devided by
 lr = 0.85
 gamma = 0.90  # discount factor, typically between 0.8 and 0.99
 reward_map = {
@@ -152,7 +153,7 @@ def state_to_idx(top, right, bottom, left) -> int:
     return int('%d%d%d%d' % (top, right, bottom, left), state_base)
 
 
-def decide_action(grid, direction) -> (any, int):
+def decide_action(grid, direction, epsilon) -> (any, int):
     if random.uniform(0, 1) < epsilon:
         # Explore: random action
         action = random.randint(0, action_size - 1)
@@ -215,6 +216,7 @@ def main():
     episode = 1
     max_score = 0
     avg_len = np.array([0] * 100)
+    epsilon_annealed = epsilon
 
     env = Environment()
     clock = pygame.time.Clock()
@@ -258,13 +260,17 @@ def main():
             print('Game %2d, score: %s/%2d, avg len: %.2f%s' % (episode, sl, max_score, np.average(avg_len), death_by_rnd_action))
 
             episode += 1
+            if episode % 50 == 0 and epsilon_annealed > 0:
+                epsilon_annealed /= annealing_rate
+                print('new epsilon', epsilon_annealed)
+
             env.reset_game()
             direction = 'right'
             state = State.RUN
 
         if state == State.RUN:
             orig_direction = direction
-            reason, action = decide_action(env.grid, direction)
+            reason, action = decide_action(env.grid, direction, epsilon_annealed)
             if actions[action]:
                 direction = handle_keys(actions[action], direction)
             old_grid = env.grid
