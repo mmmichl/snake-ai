@@ -4,7 +4,6 @@ from enum import Enum, auto
 
 import pygame
 
-
 BACKGROUND = 0
 HEAD = 1
 BODY = 2
@@ -27,6 +26,7 @@ class Feedback(Enum):
     HIT_WALL = auto(),
     HIT_TAIL = auto(),
     ELSE = auto()
+    WOULD_180 = auto()
 
 
 class Environment:
@@ -101,10 +101,10 @@ class Environment:
         self.update_grid()
         return feedback
 
-
     ### hepler methods
     def drawBlock(self, x, y, color):
-        pygame.draw.rect(self.screen, color, (x * self.cell_size + 1, y * self.cell_size + 1, self.cell_size - 1, self.cell_size - 1))
+        pygame.draw.rect(self.screen, color,
+                         (x * self.cell_size + 1, y * self.cell_size + 1, self.cell_size - 1, self.cell_size - 1))
 
     def update_grid(self):
         self.grid = [[BACKGROUND for x in range(self.rows)] for y in range(self.cols)]
@@ -115,13 +115,11 @@ class Environment:
         x, y = self.food
         self.grid[x][y] = FOOD
 
-
     def drawContent(self, grid):
         for (x, xar) in enumerate(grid):
             for (y, val) in enumerate(xar):
                 if val:
                     self.drawBlock(x, y, COL_MAP[val])
-
 
     def drawGrid(self, screen):
         # cellSize = width // rows
@@ -135,15 +133,12 @@ class Environment:
             pygame.draw.line(screen, (255, 255, 255), (x, 0), (x, self.height))
             pygame.draw.line(screen, (255, 255, 255), (0, y), (self.width, y))
 
-
     def snake_length(self):
         return len(snake)
-
 
     def drawScore(self, screen):
         ts = self.text.render('Score: %d' % len(snake), False, (255, 255, 255))
         screen.blit(ts, (0, 0))
-
 
     def bites_in_tail(self, x, y):
         for sx, sy in snake:
@@ -152,10 +147,8 @@ class Environment:
 
         return False
 
-
     def is_out_of_bound(self, x, y):
         return x < 0 or y < 0 or x >= self.cols or y >= self.cols
-
 
     def set_food(self):
         x = min(math.floor(random.random() * self.cols), self.cols - 1)
@@ -176,21 +169,37 @@ class Environment:
             return True
 
 
-def handle_keys(key, direction):
+def key_to_direction(key):
     if key == pygame.K_LEFT:
-        if not direction == 'right':
-            direction = 'left'
+        return 'left'
     elif key == pygame.K_RIGHT:
-        if not direction == 'left':
-            direction = 'right'
+        return 'right'
     elif key == pygame.K_UP:
-        if not direction == 'down':
-            direction = 'up'
+        return 'up'
     elif key == pygame.K_DOWN:
-        if not direction == 'up':
-            direction = 'down'
+        return 'down'
 
-    return direction
+
+def is_valid_direction(current_dir, new_dir):
+    if current_dir == 'right' and new_dir == 'left':
+        return False
+    if current_dir == 'left' and new_dir == 'right':
+        return False
+    if current_dir == 'down' and new_dir == 'up':
+        return False
+    if current_dir == 'up' and new_dir == 'down':
+        return False
+
+    return True
+
+
+def handle_keys(key, direction):
+    new_dir = key_to_direction(key)
+
+    if not is_valid_direction(direction, new_dir):
+        return direction
+
+    return new_dir
 
 
 class State(Enum):
