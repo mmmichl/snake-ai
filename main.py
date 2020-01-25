@@ -14,7 +14,7 @@ SNAKE_HEAD_COLOR = (0, 150, 0)
 SNAKE_FOOD_COLOR = (150, 0, 0)
 
 # calcuate what we need
-width = cols * cell_size * 2
+width = cols * cell_size
 height = rows * cell_size
 
 snake = [(cols // 2, rows // 2), (cols // 2 - 1, rows // 2)]
@@ -200,6 +200,8 @@ def main():
     clock = pygame.time.Clock()
     flag = True
     state = State.INIT
+    delay = 100
+    direction = 'right'
 
     while flag:
         last_key_event = None
@@ -233,7 +235,7 @@ def main():
 
         pygame.display.update()
 
-        clock.tick(100)
+        # clock.tick(100)
         pygame.time.delay(max(delay, 0))
 
 
