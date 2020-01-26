@@ -31,7 +31,7 @@ reward_map = {
     Feedback.HIT_TAIL: -10,
     Feedback.ATE_FOOD: +10,
     Feedback.ELSE: 0,  # -0.1,
-    Feedback.WOULD_180: -1,
+    Feedback.WOULD_180: -10,
 }
 
 
@@ -50,20 +50,28 @@ class QDN(nn.Module):
                  state_size,
                  action_size,
                  device=None,
-                 hidden_size=[50, 50]) -> None:
+                 hidden_size=[120, 120, 120]) -> None:
         super(QDN, self).__init__()
 
-        assert len(hidden_size) == 2, 'must be exactly 2 hidden layers'
+        # assert len(hidden_size) == 2, 'must be exactly 2 hidden layers'
 
         self.device = device
         self.h1 = nn.Linear(state_size, hidden_size[0])
+        self.drop1 = nn.Dropout(0.15)
         self.h2 = nn.Linear(hidden_size[0], hidden_size[1])
+        self.drop2 = nn.Dropout(0.15)
+        self.h3 = nn.Linear(hidden_size[1], hidden_size[2])
+        self.drop3 = nn.Dropout(0.15)
 
         self.out = nn.Linear(hidden_size[1], action_size)
 
     def forward(self, input: Tensor) -> Tensor:
         x = F.relu(self.h1(input))
+        x = self.drop1(x)
         x = F.relu(self.h2(x))
+        x = self.drop2(x)
+        x = F.relu(self.h3(x))
+        x = self.drop3(x)
         return self.out(x)
 
 
@@ -71,8 +79,8 @@ class Agent(object):
     """Deep Q-learning agent."""
     GAMMA = 0.999
     EPS_START = 0.9
-    EPS_END = 0.05
-    EPS_DECAY = 200
+    EPS_END = 0.001
+    EPS_DECAY = 80
     BATCH_SIZE = 128
 
     steps_done = 0
@@ -93,7 +101,7 @@ class Agent(object):
         self.update_target_network()
         self.target_net.eval()
 
-        self.optimizer = optim.RMSprop(self.policy_net.parameters())
+        self.optimizer = optim.Adam(self.policy_net.parameters())
         self.memory = ReplayMemory(10000)
 
         self.experience_replay = None
@@ -201,7 +209,7 @@ class Agent(object):
         expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch
 
         # Compute Huber loss
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        loss = F.mse_loss(state_action_values, expected_state_action_values.unsqueeze(1))
 
         # Optimize the model
         self.optimizer.zero_grad()
