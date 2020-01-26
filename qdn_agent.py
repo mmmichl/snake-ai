@@ -23,7 +23,6 @@ print('torch', torch.__version__, 'device', device)
 is_ipython = 'inline' in matplotlib.get_backend()
 
 actions = ['up', 'down', 'left', 'right']
-STATE_SIZE = 11
 ACTIONS_SIZE = len(actions)
 
 reward_map = {
@@ -35,28 +34,19 @@ reward_map = {
 }
 
 
-# todo refactor rename
-def get_screen(grid, direction):
-    state = q_state_11(grid, direction)
-    # convert to torch, add batch dimension, to device
-    return torch.FloatTensor(state) \
-        .unsqueeze(0) \
-        .to(device)
-
-
-class QDN(nn.Module):
+class QDN11features(nn.Module):
+    STATE_SIZE = 11
 
     def __init__(self,
-                 state_size,
                  action_size,
                  device=None,
                  hidden_size=[120, 120, 120]) -> None:
-        super(QDN, self).__init__()
+        super(QDN11features, self).__init__()
 
         # assert len(hidden_size) == 2, 'must be exactly 2 hidden layers'
 
         self.device = device
-        self.h1 = nn.Linear(state_size, hidden_size[0])
+        self.h1 = nn.Linear(self.STATE_SIZE, hidden_size[0])
         self.drop1 = nn.Dropout(0.15)
         self.h2 = nn.Linear(hidden_size[0], hidden_size[1])
         self.drop2 = nn.Dropout(0.15)
@@ -74,6 +64,14 @@ class QDN(nn.Module):
         x = self.drop3(x)
         return self.out(x)
 
+    @staticmethod
+    def get_state(grid, direction):
+        state = q_state_11(grid, direction)
+        # convert to torch, add batch dimension, to device
+        return torch.FloatTensor(state) \
+            .unsqueeze(0) \
+            .to(device)
+
 
 class Agent(object):
     """Deep Q-learning agent."""
@@ -87,8 +85,8 @@ class Agent(object):
     episode_durations = []
 
     def __init__(self,
-                 state_space_size,
-                 action_space_size):
+                 action_space_size,
+                 QDN):
         """Set parameters, initialize network."""
 
         self.action_space_size = action_space_size
@@ -96,8 +94,8 @@ class Agent(object):
         # if gpu is to be used
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.policy_net = QDN(state_space_size, action_space_size).to(device)
-        self.target_net = QDN(state_space_size, action_space_size).to(device)
+        self.policy_net = QDN(action_space_size).to(device)
+        self.target_net = QDN(action_space_size).to(device)
         self.update_target_network()
         self.target_net.eval()
 
@@ -231,6 +229,7 @@ def main():
 
     ## Hyperparameter
     TARGET_UPDATE = 10
+    QDN = QDN11features
 
     max_score = 0
     avg_len = np.array([0] * 100)
@@ -239,14 +238,14 @@ def main():
     direction = 'right'
     delay = 0
 
-    agent = Agent(STATE_SIZE, ACTIONS_SIZE)
+    agent = Agent(ACTIONS_SIZE, QDN)
 
     num_episodes = 500
     for i_episode in range(num_episodes):
         # Initialize the environment and state
         env.reset_game()
-        last_screen = get_screen(env.grid, direction)
-        current_screen = get_screen(env.grid, direction)
+        last_screen = QDN.get_state(env.grid, direction)
+        current_screen = QDN.get_state(env.grid, direction)
         state = current_screen
         for t in count():
             for event in pygame.event.get():
@@ -282,7 +281,7 @@ def main():
 
             # Observe new state
             last_screen = current_screen
-            current_screen = get_screen(env.grid, direction)
+            current_screen = QDN.get_state(env.grid, direction)
             done = feedback in [Feedback.HIT_TAIL, Feedback.HIT_WALL]
             if not done:
                 next_state = current_screen
