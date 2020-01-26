@@ -32,7 +32,7 @@ class Feedback(Enum):
 class Environment:
     cell_size = 30
 
-    rows = 10
+    rows = 20
     cols = rows
 
     # calcuate what we need

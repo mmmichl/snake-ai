@@ -253,11 +253,7 @@ def main():
 
         if state == State.GAME_OVER:
             max_score = max(env.snake_length(), max_score)
-            death_cuase = 'wall' if feedback == Feedback.HIT_WALL else 'tail' if feedback == Feedback.HIT_TAIL else 'unkn'
-            sl = '%2d' % env.snake_length() if env.snake_length() > 2 else ' _'
-            avg_len[episode % len(avg_len)] = env.snake_length()
-            death_by_rnd_action = ', death by random action' if reason == 'rnd' else ''
-            print('Game %2d, score: %s/%2d, avg len: %.2f%s' % (episode, sl, max_score, np.average(avg_len), death_by_rnd_action))
+            game_stats(avg_len, env, episode, feedback, max_score, reason)
 
             episode += 1
             if episode % 50 == 0 and epsilon_annealed > 0:
@@ -295,6 +291,16 @@ def main():
 
         # clock.tick(100)
         pygame.time.delay(delay)
+
+
+def game_stats(avg_len, env, episode, feedback, max_score, reason):
+    death_cuase = 'wall' if feedback == Feedback.HIT_WALL else 'tail' if feedback == Feedback.HIT_TAIL else 'unkn'
+    sl = '%2d' % env.snake_length() if env.snake_length() > 2 else ' _'
+    avg_len[episode % len(avg_len)] = env.snake_length()
+    death_by_rnd_action = ', death by random action' if reason == 'rnd' else ''
+    print(
+        'Game %2d, score: %s/%2d, avg len: %.2f, %s%s' %
+        (episode, sl, max_score, np.average(avg_len), death_cuase, death_by_rnd_action))
 
 
 if __name__ == '__main__':
