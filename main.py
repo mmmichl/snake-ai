@@ -43,21 +43,22 @@ class Environment:
     snake = [(cols // 2, rows // 2), (cols // 2 - 1, rows // 2)]
     food = None
 
-    def __init__(self):
-        pygame.init()
-        pygame.font.init()
+    def __init__(self, headless=False):
+        self.headless = headless
+        if not self.headless:
+            pygame.init()
+            pygame.font.init()
 
-        self.screen = pygame.display.set_mode((self.width, self.height))
-        pygame.display.set_caption("Snake AI")
+            self.screen = pygame.display.set_mode((self.width, self.height))
+            pygame.display.set_caption("Snake AI")
 
-        self.text = pygame.font.SysFont('Arial', 20)
-        self.banner_text = pygame.font.SysFont('Arial', 40)
+            self.text = pygame.font.SysFont('Arial', 20)
+            self.banner_text = pygame.font.SysFont('Arial', 40)
 
         self.reset_game()
 
     def reset_game(self):
-        global snake
-        snake = [(self.cols // 2, self.rows // 2), (self.cols // 2 - 1, self.rows // 2)]
+        self.snake = [(self.cols // 2, self.rows // 2), (self.cols // 2 - 1, self.rows // 2)]
         self.set_food()
         self.update_grid()
 
@@ -65,6 +66,9 @@ class Environment:
         return self.grid
 
     def redrawWindow(self):
+        if self.headless:
+            return
+
         self.screen.fill((0, 0, 0))
         # drawGrid(screen)
 
@@ -74,7 +78,7 @@ class Environment:
         pygame.display.update()
 
     def step(self, direction: str) -> Feedback:
-        x, y = snake[0]
+        x, y = self.snake[0]
 
         if direction == 'up':
             y -= 1
@@ -90,12 +94,12 @@ class Environment:
         elif self.bites_in_tail(x, y):
             feedback = Feedback.HIT_TAIL
         else:
-            snake.insert(0, (x, y))
+            self.snake.insert(0, (x, y))
 
             if self.handle_food():
                 feedback = Feedback.ATE_FOOD
             else:
-                snake.pop()
+                self.snake.pop()
                 feedback = Feedback.ELSE
 
         self.update_grid()
@@ -109,7 +113,7 @@ class Environment:
     def update_grid(self):
         self.grid = [[BACKGROUND for x in range(self.rows)] for y in range(self.cols)]
 
-        for i, s in enumerate(snake):
+        for i, s in enumerate(self.snake):
             self.grid[s[0]][s[1]] = HEAD if i == 0 else BODY
 
         x, y = self.food
@@ -134,14 +138,14 @@ class Environment:
             pygame.draw.line(screen, (255, 255, 255), (0, y), (self.width, y))
 
     def snake_length(self):
-        return len(snake)
+        return len(self.snake)
 
     def drawScore(self, screen):
-        ts = self.text.render('Score: %d' % len(snake), False, (255, 255, 255))
+        ts = self.text.render('Score: %d' % len(self.snake), False, (255, 255, 255))
         screen.blit(ts, (0, 0))
 
     def bites_in_tail(self, x, y):
-        for sx, sy in snake:
+        for sx, sy in self.snake:
             if sx == x and sy == y:
                 return True
 
@@ -162,7 +166,7 @@ class Environment:
 
     def handle_food(self) -> bool:
         fx, fy = self.food
-        sx, sy = snake[0]
+        sx, sy = self.snake[0]
 
         if fx == sx and fy == sy:
             self.set_food()
@@ -190,7 +194,7 @@ def is_valid_direction(current_dir, new_dir):
     if current_dir == 'up' and new_dir == 'down':
         return False
 
-    return True
+    return new_dir in ['right', 'left', 'down', 'up']
 
 
 def handle_keys(key, direction):

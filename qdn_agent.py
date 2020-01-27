@@ -266,7 +266,7 @@ def main():
     max_score = 0
     avg_len = np.array([0] * 100)
 
-    env = Environment()
+    env = Environment(False)
     direction = 'right'
     delay = 0
 
@@ -279,22 +279,23 @@ def main():
         current_screen = QDN.get_state(env.grid, direction)
         state = current_screen
         for t in count():
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    flag = False
-                if event.type == pygame.KEYDOWN:
-                    last_key_event = event
-                    if event.key == pygame.K_q:
-                        pygame.quit()
+            if not env.headless:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
                         flag = False
-                    if event.key == pygame.K_EQUALS:
-                        delay += 10
-                        print('delay', delay)
-                    if event.key == pygame.K_MINUS:
-                        delay -= 10
-                        print('delay', delay)
-                    if event.key == pygame.K_d:
-                        DEBUG_OUT = not DEBUG_OUT
+                    if event.type == pygame.KEYDOWN:
+                        last_key_event = event
+                        if event.key == pygame.K_q:
+                            pygame.quit()
+                            flag = False
+                        if event.key == pygame.K_EQUALS:
+                            delay += 10
+                            print('delay', delay)
+                        if event.key == pygame.K_MINUS:
+                            delay -= 10
+                            print('delay', delay)
+                        if event.key == pygame.K_d:
+                            DEBUG_OUT = not DEBUG_OUT
 
             # Select and perform an action
             reason, action = agent.select_action(state)
