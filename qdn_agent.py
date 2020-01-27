@@ -135,13 +135,70 @@ class QDNfullState(nn.Module):
             .to(device)
 
 
+class QDNfullStateFully(nn.Module):
+    STATE_SIZE = Environment.rows * Environment.cols * 5
+    REPLAY_SIZE = 50000
+    INPUT_DIM = 5
+
+    def __init__(self,
+                 action_size,
+                 device=None,
+                 hidden_size=[600, 600, 600]) -> None:
+        super(QDNfullStateFully, self).__init__()
+
+        # assert len(hidden_size) == 2, 'must be exactly 2 hidden layers'
+
+        self.device = device
+        self.h1 = nn.Linear(self.STATE_SIZE, hidden_size[0])
+        self.drop1 = nn.Dropout(0.15)
+        self.h2 = nn.Linear(hidden_size[0], hidden_size[1])
+        self.drop2 = nn.Dropout(0.15)
+        self.h3 = nn.Linear(hidden_size[1], hidden_size[2])
+        self.drop3 = nn.Dropout(0.15)
+
+        self.out = nn.Linear(hidden_size[2], action_size)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = F.relu(self.h1(x))
+        x = self.drop1(x)
+        x = F.relu(self.h2(x))
+        x = self.drop2(x)
+        x = F.relu(self.h3(x))
+        x = self.drop3(x)
+
+        return self.out(x)
+
+    @staticmethod
+    def get_state(grid, direction):
+        dir_up = dir_down = dir_left = dir_right = False
+        if direction == 'up':
+            dir_up = True
+        elif direction == 'down':
+            dir_down = True
+        elif direction == 'left':
+            dir_left = True
+        elif direction == 'right':
+            dir_right = True
+        else:
+            raise Exception('unknown direction ' + direction)
+        state = torch.tensor(grid)
+        # convert to torch, add batch dimension, to device
+        hot = torch.nn.functional.one_hot(state, QDNfullState.INPUT_DIM)
+        return hot \
+            .reshape(QDNfullState.INPUT_DIM, hot.shape[0], hot.shape[1]) \
+            .type(torch.float) \
+            .flatten() \
+            .unsqueeze(0) \
+            .to(device)
+
+
 class Agent(object):
     """Deep Q-learning agent."""
     BATCH_SIZE = 128
     GAMMA = 0.999
     EPS_START = 0.7
     EPS_END = 0.05
-    EPS_DECAY = 2000
+    EPS_DECAY = 500
 
     steps_done = 0
     episode_durations = []
@@ -260,7 +317,7 @@ def main():
 
     ## Hyperparameter
     TARGET_UPDATE = 30
-    QDN = QDNfullState
+    QDN = QDNfullStateFully
     num_episodes = 5000
 
     max_score = 0
