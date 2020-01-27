@@ -36,6 +36,7 @@ reward_map = {
 
 class QDN11features(nn.Module):
     STATE_SIZE = 11
+    REPLAY_SIZE = 10000
 
     def __init__(self,
                  action_size,
@@ -73,13 +74,74 @@ class QDN11features(nn.Module):
             .to(device)
 
 
+class QDNfullState(nn.Module):
+    STATE_SIZE = Environment.rows * Environment.cols #+ 4
+    REPLAY_SIZE = 50000
+    INPUT_DIM = 5
+
+    def __init__(self,
+                 action_size,
+                 device=None,
+                 hidden_size=[120, 120, 120]) -> None:
+        super(QDNfullState, self).__init__()
+
+        # assert len(hidden_size) == 2, 'must be exactly 2 hidden layers'
+
+        self.device = device
+        self.conv1 = nn.Conv2d(self.INPUT_DIM, 16, kernel_size=3)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3)
+        self.bn3 = nn.BatchNorm2d(32)
+
+        # Number of Linear input connections depends on output of conv2d layers
+        # and therefore the input image size, so compute it.
+        def conv2d_size_out(size, kernel_size=3, stride=0):
+            return (size - (kernel_size - 1) - 1) + 1
+
+        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(Environment.rows)))
+        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(Environment.cols)))
+        linear_input_size = convw * convh * 32
+
+        self.head = nn.Linear(linear_input_size, action_size)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        return self.head(x.view(x.size(0), -1))
+
+    @staticmethod
+    def get_state(grid, direction):
+        dir_up = dir_down = dir_left = dir_right = False
+        if direction == 'up':
+            dir_up = True
+        elif direction == 'down':
+            dir_down = True
+        elif direction == 'left':
+            dir_left = True
+        elif direction == 'right':
+            dir_right = True
+        else:
+            raise Exception('unknown direction ' + direction)
+        state = torch.tensor(grid)
+        # convert to torch, add batch dimension, to device
+        hot = torch.nn.functional.one_hot(state, QDNfullState.INPUT_DIM)
+        return hot \
+            .reshape(QDNfullState.INPUT_DIM, hot.shape[0], hot.shape[1]) \
+            .type(torch.float) \
+            .unsqueeze(0) \
+            .to(device)
+
+
 class Agent(object):
     """Deep Q-learning agent."""
-    GAMMA = 0.999
-    EPS_START = 0.9
-    EPS_END = 0.001
-    EPS_DECAY = 80
     BATCH_SIZE = 128
+    GAMMA = 0.999
+    EPS_START = 0.7
+    EPS_END = 0.05
+    EPS_DECAY = 2000
 
     steps_done = 0
     episode_durations = []
@@ -95,12 +157,13 @@ class Agent(object):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.policy_net = QDN(action_space_size).to(device)
+        print(self.policy_net)
         self.target_net = QDN(action_space_size).to(device)
-        self.update_target_network()
+        self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
         self.optimizer = optim.Adam(self.policy_net.parameters())
-        self.memory = ReplayMemory(10000)
+        self.memory = ReplayMemory(QDN.REPLAY_SIZE)
 
         self.experience_replay = None
 
@@ -138,38 +201,6 @@ class Agent(object):
         if is_ipython:
             display.clear_output(wait=True)
             display.display(plt.gcf())
-
-    def step(self, observation, training=True):
-        # TODO other tut
-        """Observe state and rewards, select action."""
-        pass
-
-    def update_target_network(self):
-        # TODO other tut
-        """Update target network weights with current online network values."""
-        self.target_net.load_state_dict(self.policy_net.state_dict())
-
-    def train_network(self):
-        # TODO other tut
-        """Update online network weights."""
-        inputs = None
-        actions = None
-        rewards = None
-        next_inputs = None
-
-        actions_one_hot = self.action_space_size
-
-        # forward pass
-        self.policy_net.forward(inputs)
-
-        # loss
-        loss = F.mse_loss()
-
-        # backward pass
-        self.optimizer.zero_grad()
-        loss.backward()
-        for param in self.policy_net.parameters():
-            param.gard.data.clamp_(-1, 1)
 
     def optimize_model(self):
         if len(self.memory) < self.BATCH_SIZE:
@@ -228,8 +259,9 @@ def main():
     plt.ion()
 
     ## Hyperparameter
-    TARGET_UPDATE = 10
-    QDN = QDN11features
+    TARGET_UPDATE = 30
+    QDN = QDNfullState
+    num_episodes = 5000
 
     max_score = 0
     avg_len = np.array([0] * 100)
@@ -240,7 +272,6 @@ def main():
 
     agent = Agent(ACTIONS_SIZE, QDN)
 
-    num_episodes = 500
     for i_episode in range(num_episodes):
         # Initialize the environment and state
         env.reset_game()
