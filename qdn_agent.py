@@ -1,5 +1,7 @@
 import math
 import random
+import sys
+from argparse import ArgumentParser
 from itertools import count
 
 import matplotlib
@@ -309,7 +311,7 @@ class Agent(object):
         self.optimizer.step()
 
 
-def main():
+def main(head_less=False):
     """
     Main method and execution start point
     """
@@ -327,7 +329,7 @@ def main():
     max_score = 0
     avg_len = np.array([0] * 100)
 
-    env = Environment(False)
+    env = Environment(head_less)
     direction = 'right'
     delay = 0
 
@@ -406,4 +408,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = ArgumentParser()
+    parser.add_argument("-hl", "--head-less", dest="head_less",
+                        help="headless mode", action='store_true', default=False)
+
+    args = parser.parse_args()
+
+    main(args.head_less)
