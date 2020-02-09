@@ -26,11 +26,13 @@ actions = ['up', 'down', 'left', 'right']
 ACTIONS_SIZE = len(actions)
 
 reward_map = {
-    Feedback.HIT_WALL: -10,
-    Feedback.HIT_TAIL: -10,
-    Feedback.ATE_FOOD: +10,
+    Feedback.HIT_WALL: -15,
+    Feedback.HIT_TAIL: -15,
+    Feedback.ATE_FOOD: +15,
     Feedback.ELSE: 0,  # -0.1,
-    Feedback.WOULD_180: -10,
+    Feedback.WOULD_180: -15,
+    Feedback.TOWARDS_FOOD: +1,
+    Feedback.AWAY_FOOD: -1,
 }
 
 
@@ -88,29 +90,31 @@ class QDNfullState(nn.Module):
         # assert len(hidden_size) == 2, 'must be exactly 2 hidden layers'
 
         self.device = device
-        self.conv1 = nn.Conv2d(self.INPUT_DIM, 16, kernel_size=3)
+        self.conv1 = nn.Conv2d(self.INPUT_DIM, 16, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(16)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 32, kernel_size=3)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
         self.bn3 = nn.BatchNorm2d(32)
 
         # Number of Linear input connections depends on output of conv2d layers
         # and therefore the input image size, so compute it.
-        def conv2d_size_out(size, kernel_size=3, stride=0):
-            return (size - (kernel_size - 1) - 1) + 1
+        def conv2d_size_out(size, kernel_size=3, stride=0, padding=1):
+            return (size + (2 * padding) - (kernel_size - 1) - 1) + 1
 
         convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(Environment.rows)))
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(Environment.cols)))
         linear_input_size = convw * convh * 32
 
+        self.dn1 = nn.Linear(linear_input_size, linear_input_size)
         self.head = nn.Linear(linear_input_size, action_size)
 
     def forward(self, x: Tensor) -> Tensor:
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
-        return self.head(x.view(x.size(0), -1))
+        x = self.dn1(x.view(x.size(0), -1))
+        return self.head(x)
 
     @staticmethod
     def get_state(grid, direction):
@@ -317,7 +321,7 @@ def main():
 
     ## Hyperparameter
     TARGET_UPDATE = 30
-    QDN = QDNfullStateFully
+    QDN = QDNfullState
     num_episodes = 5000
 
     max_score = 0

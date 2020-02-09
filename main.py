@@ -27,6 +27,8 @@ class Feedback(Enum):
     HIT_TAIL = auto(),
     ELSE = auto()
     WOULD_180 = auto()
+    TOWARDS_FOOD = auto()
+    AWAY_FOOD = auto()
 
 
 class Environment:
@@ -100,7 +102,14 @@ class Environment:
                 feedback = Feedback.ATE_FOOD
             else:
                 self.snake.pop()
-                feedback = Feedback.ELSE
+                old_x, old_y = self.snake[1]
+                food_x, food_y = self.food
+                old_dist = abs(food_x - old_x) + abs(food_y - old_y)
+                new_dist = abs(food_x - x) + abs(food_y - y)
+                if old_dist >= new_dist:
+                    feedback = Feedback.TOWARDS_FOOD
+                else:
+                    feedback = Feedback.AWAY_FOOD
 
         self.update_grid()
         return feedback
