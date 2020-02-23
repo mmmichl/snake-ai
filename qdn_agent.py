@@ -27,14 +27,15 @@ is_ipython = 'inline' in matplotlib.get_backend()
 actions = ['up', 'down', 'left', 'right']
 ACTIONS_SIZE = len(actions)
 
+DIE_PUNISH = -40
 reward_map = {
-    Feedback.HIT_WALL: -15,
-    Feedback.HIT_TAIL: -15,
+    Feedback.HIT_WALL: DIE_PUNISH,
+    Feedback.HIT_TAIL: DIE_PUNISH,
     Feedback.ATE_FOOD: +15,
     Feedback.ELSE: 0,  # -0.1,
-    Feedback.WOULD_180: -15,
+    Feedback.WOULD_180: DIE_PUNISH,
     Feedback.TOWARDS_FOOD: +1,
-    Feedback.AWAY_FOOD: -1,
+    Feedback.AWAY_FOOD: 0,
 }
 
 
@@ -108,14 +109,15 @@ class QDNfullState(nn.Module):
         convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(Environment.cols)))
         linear_input_size = convw * convh * 32
 
-        self.dn1 = nn.Linear(linear_input_size, linear_input_size)
+        # self.dn1 = nn.Linear(linear_input_size, linear_input_size)
         self.head = nn.Linear(linear_input_size, action_size)
 
     def forward(self, x: Tensor) -> Tensor:
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
-        x = self.dn1(x.view(x.size(0), -1))
+        x = x.view(x.size(0), -1)
+        # x = self.dn1(x)
         return self.head(x)
 
     @staticmethod
@@ -142,25 +144,26 @@ class QDNfullState(nn.Module):
 
 
 class QDNfullStateFully(nn.Module):
-    STATE_SIZE = Environment.rows * Environment.cols * 5
-    REPLAY_SIZE = 50000
+    STATE_SIZE = Environment.rows * Environment.cols * 5 + 11
+    REPLAY_SIZE = 20000
     INPUT_DIM = 5
 
     def __init__(self,
                  action_size,
                  device=None,
-                 hidden_size=[600, 600, 600]) -> None:
+                 hidden_size=[200, 200, 200]) -> None:
         super(QDNfullStateFully, self).__init__()
 
         # assert len(hidden_size) == 2, 'must be exactly 2 hidden layers'
 
         self.device = device
         self.h1 = nn.Linear(self.STATE_SIZE, hidden_size[0])
-        self.drop1 = nn.Dropout(0.15)
+        DROPUT_RATE = 0.05
+        self.drop1 = nn.Dropout(DROPUT_RATE)
         self.h2 = nn.Linear(hidden_size[0], hidden_size[1])
-        self.drop2 = nn.Dropout(0.15)
+        self.drop2 = nn.Dropout(DROPUT_RATE)
         self.h3 = nn.Linear(hidden_size[1], hidden_size[2])
-        self.drop3 = nn.Dropout(0.15)
+        self.drop3 = nn.Dropout(DROPUT_RATE)
 
         self.out = nn.Linear(hidden_size[2], action_size)
 
@@ -189,22 +192,33 @@ class QDNfullStateFully(nn.Module):
             raise Exception('unknown direction ' + direction)
         state = torch.tensor(grid)
         # convert to torch, add batch dimension, to device
+
         hot = torch.nn.functional.one_hot(state, QDNfullState.INPUT_DIM)
-        return hot \
+
+        state_11 = q_state_11(grid, direction)
+        # convert to torch, add batch dimension, to device
+        s11 = torch.FloatTensor(state_11) \
+            .unsqueeze(0) \
+
+        hot_prep = hot \
             .reshape(QDNfullState.INPUT_DIM, hot.shape[0], hot.shape[1]) \
             .type(torch.float) \
             .flatten() \
-            .unsqueeze(0) \
+            .unsqueeze(0)
+
+
+        cat = torch.cat((hot_prep, s11), 1)
+        return cat \
             .to(device)
 
 
 class Agent(object):
     """Deep Q-learning agent."""
     BATCH_SIZE = 128
-    GAMMA = 0.999
+    GAMMA = 0.99
     EPS_START = 0.7
-    EPS_END = 0.05
-    EPS_DECAY = 500
+    EPS_END = 0.01
+    EPS_DECAY = 600
 
     steps_done = 0
     episode_durations = []
@@ -323,7 +337,7 @@ def main(head_less=False):
 
     ## Hyperparameter
     TARGET_UPDATE = 30
-    QDN = QDNfullState
+    QDN = QDNfullStateFully
     num_episodes = 5000
 
     max_score = 0
